@@ -172,8 +172,8 @@ func getBlurMatchFunction(name string) func(string) bool {
 func call(f reflect.Value, in ...reflect.Value) []reflect.Value {
 	t := f.Type()
 	var args = make([]reflect.Value, t.NumIn())
-	for index := range in {
+	for index := range args {
 		args[index] = in[index].Convert(t.In(index))
 	}
-	return f.Call(in)
+	return f.Call(args)
 }

@@ -161,7 +161,7 @@ func TestSliceFunctionSignature(t *testing.T) {
 		slices.Number.SelectMany(func() {})
 	})
 	EstimateFail(t, func(*testing.T) {
-		slices.Number.ForEach(func(string) {})
+		slices.Number.ForEach(func(bool) {})
 	})
 }
 

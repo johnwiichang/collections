@@ -173,9 +173,14 @@ func (lst *list) Slice(slice ...interface{}) interface{} {
 }
 
 func (lst *list) ToDictionary(f ...interface{}) Dictionary {
-	f = append(f, func() interface{} { return nil })
-	val, function := lst.value, reflect.ValueOf(f[0])
-	if err := typeRequired(function.Type(),
+	if len(f) == 0 {
+		f = []interface{}{func() interface{} { return nil }}
+	}
+	var functions = []reflect.Value{reflect.ValueOf(f[0]), makeConflictHandler(lst.t.Elem(), 1)}
+	if len(f) == 2 {
+		functions[1] = reflect.ValueOf(f[1])
+	}
+	if err := typeRequired(functions[0].Type(),
 		//支持的函数签名
 		newFunc()(types.AnyType, types.AnyTypes)(),
 		newFunc(types.Int, lst.t.Elem())(types.AnyType, types.AnyTypes)(),
@@ -183,20 +188,31 @@ func (lst *list) ToDictionary(f ...interface{}) Dictionary {
 	); err != nil {
 		panic(err)
 	}
-	var funct = function.Type()
+	if err := typeRequired(functions[1].Type(),
+		//支持的函数签名
+		newFunc(lst.t.Elem(), types.AnyType)(lst.t.Elem())(),
+	); err != nil {
+		panic(err)
+	}
+	var funct = functions[0].Type()
 	var kt, vt = lst.t.Elem(), funct.Out(0)
 	if funct.NumOut() > 1 {
-		kt, vt = funct.Out(0), funct.Out(1)
+		kt, vt = vt, funct.Out(1)
 	}
-	var newmap, numin = newDictionary(reflect.MapOf(kt, vt), val.Len()), function.Type().NumIn()
+	var newmap, numin = newDictionary(reflect.MapOf(kt, vt), lst.value.Len()), functions[0].Type().NumIn()
 	lst.ForEach(func(i int, val interface{}) {
 		var args = []reflect.Value{reflect.ValueOf(i), reflect.ValueOf(val)}
-		var back = call(function, args[2-numin:2]...)
+		var back = call(functions[0], args[2-numin:2]...)
+		var key, value reflect.Value
 		if len(back) > 1 {
-			newmap.value.SetMapIndex(back[0], back[1])
+			key, value = back[0], back[1]
 		} else {
-			newmap.value.SetMapIndex(args[1], back[0])
+			key, value = args[1], back[0]
 		}
+		if old := newmap.value.MapIndex(key); old.IsValid() {
+			value = call(functions[1], old, value)[0]
+		}
+		newmap.value.SetMapIndex(key, value)
 	})
 	return newmap
 }

@@ -193,4 +193,84 @@ Similar to `Take`, but `Resize` performs an intercept operation on the current l
 
 ## Dictionary
 
-> TBD.
+Dictionary is suitable for `map`.
+
+### Declare
+
+
+```go
+var dicts = struct {
+	NumberWithTrue collections.Dictionary
+}{
+	collections.From(map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true}).Dictionary(),
+}
+```
+
+*The data type within the Dictionary must be a valid `map`.*
+
+### Actions
+Some mature methods are listed below for collection operations.
+
+**Map(m ...interface{}) interface{}**
+
+Get the internal map as `interface{}`, user must know the specific type of internal maps or use assertions.
+
+**Keys() List**
+
+Get keys of the Dictionary collection as a list collection.
+
+**Values() List**
+
+Get values of the Dictionary collection as a list collection.
+
+**Where(f interface{}) Dictionary**
+
+Query a Dictionary collection.
+
+```go
+var f = func(n int) bool { return n > 2 }
+slices.Number.Where(f)
+```
+
+**Count(f ...interface{}) int**
+
+Counting a Dictionary collection can also be conditionally equivalent to `.Where(f).Count()`.
+
+**ForEach(f interface{}) Dictionary**
+
+Traverse the collection and then invoke a custom function (which will not change the element), support the first parameter to use the `bool` value `false` or the last parameter `error` as not `nil` to terminate traversal.
+
+```go
+slices.Struct.ForEach(func(i int, item *Int) (bool) {
+	return len(item.Many) != 0
+})
+```
+
+> The function will not change the elements within any collection!
+
+**Select(f interface{}) Dictionary**
+
+Create another collection of elements from a collection of elements and output a new collection.
+
+```go
+dicts.NumberWithTrue.Select(func(k int, v bool) (int, string) {
+	return k, strconv.Itoa(k)
+})
+```
+
+> `k` is key of the `Dictionary` and `v` is the value of the `Dictionary`. **Ignore `v` directly if the value is not required.**
+
+**Merge(d Dictionary, onConflict ...interface{}) Dictionary**
+
+Combine two dictionaries into a `Dictionary`.
+
+```go
+var dict2 = dicts.NumberWithTrue.Select(func(k int, v bool) (int, bool) {
+	return k + 1, !v
+})
+var dict = dicts.NumberWithTrue.Merge(dict2, func(old bool) bool { return old })
+```
+
+You can make your decisions when conflicting keys are encountered. The conflicting keys are listed in *'old' - 'new'* order and will be overwritten by default using the merged target dictionary values.
+
+> If a new value is not required, it can be ignored directly in the parameters as in the example code.

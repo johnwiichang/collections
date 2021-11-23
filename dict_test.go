@@ -53,6 +53,24 @@ func TestDictionaryQuery(t *testing.T) {
 	}
 }
 
+func TestDictionaryCombine(t *testing.T) {
+	var dict2 = dicts.NumberWithTrue.Select(func(k int, v bool) (int, bool) {
+		return k + 1, !v
+	})
+	var dict = dicts.NumberWithTrue.Merge(dict2, func(old bool) bool { return old })
+	if dict.Count(func(_ int, v bool) bool { return !v }) != 1 {
+		t.Fatalf("there must be only 1 false value.")
+	}
+	dict = dicts.NumberWithTrue.Merge(dict2)
+	if dict.Count(func(_ int, v bool) bool { return v }) != 1 {
+		t.Fatalf("there must be only 1 true value.")
+	}
+	dict = dicts.NumberWithTrue.Merge(collections.From(map[int]bool{}).Dictionary())
+	if !reflect.DeepEqual(dict.Map(), dicts.NumberWithTrue.Map()) {
+		t.Fail()
+	}
+}
+
 func TestDictionaryFunctionSignature(t *testing.T) {
 	EstimateFail(t, func(*testing.T) {
 		dicts.NumberWithTrue.Where(func() {})
@@ -62,5 +80,11 @@ func TestDictionaryFunctionSignature(t *testing.T) {
 	})
 	EstimateFail(t, func(*testing.T) {
 		dicts.NumberWithTrue.ForEach(func(string) {})
+	})
+	EstimateFail(t, func(*testing.T) {
+		dicts.NumberWithTrue.Merge(collections.From(map[bool]int{true: 1, false: 0}).Dictionary())
+	})
+	EstimateFail(t, func(*testing.T) {
+		dicts.NumberWithTrue.Merge(collections.From(map[int]bool{}).Dictionary(), func(a, b int) int { return a })
 	})
 }

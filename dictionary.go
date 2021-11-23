@@ -13,6 +13,9 @@ type (
 		Count(f ...interface{}) int
 		ForEach(f interface{}) Dictionary
 		Select(f interface{}) Dictionary
+		Merge(d Dictionary, onConflict ...interface{}) Dictionary
+
+		Type() reflect.Type
 	}
 
 	dictionary struct {
@@ -105,7 +108,17 @@ func (dict *dictionary) ForEach(f interface{}) Dictionary {
 	var numin = function.Type().NumIn()
 	for _, key := range val.MapKeys() {
 		var args = []reflect.Value{key, val.MapIndex(key)}
-		call(function, args[:numin]...)
+		var back = call(function, args[:numin]...)
+		if len(back) > 0 {
+			var first, last = back[0], back[len(back)-1].Interface()
+			var stop = first.Kind() == reflect.Bool && !first.Bool()
+			if !stop && last != nil {
+				_, stop = last.(error)
+			}
+			if stop {
+				break
+			}
+		}
 	}
 	return dict
 }
@@ -133,4 +146,54 @@ func (dict *dictionary) Select(f interface{}) Dictionary {
 		newmap.value.SetMapIndex(key, back[0])
 	})
 	return newmap
+}
+
+func (dict *dictionary) copy() *dictionary {
+	var newdict = newDictionary(dict.t)
+	dict.ForEach(func(k, v interface{}) {
+		newdict.value.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(v))
+	})
+	return newdict
+}
+
+func (dict *dictionary) Type() reflect.Type {
+	return dict.t
+}
+
+func (dict *dictionary) Merge(d Dictionary, onConflict ...interface{}) Dictionary {
+	if err := typeRequired(d.Type(), dict.t); err != nil {
+		panic(err)
+	}
+	var function reflect.Value
+	if len(onConflict) == 0 {
+		function = makeConflictHandler(d.Type().Elem(), 1)
+	} else {
+		function = reflect.ValueOf(onConflict[0])
+	}
+	var funct = function.Type()
+	if err := typeRequired(funct,
+		newFunc(dict.t.Elem(), types.AnyTypes)(dict.t.Elem())(),
+	); err != nil {
+		panic(err)
+	}
+	var newmap = dict.copy()
+	d.ForEach(func(k, v interface{}) {
+		var key = reflect.ValueOf(k)
+		if !newmap.value.MapIndex(key).IsValid() {
+			newmap.value.SetMapIndex(key, reflect.ValueOf(v))
+		} else {
+			var old = newmap.value.MapIndex(key)
+			newmap.value.SetMapIndex(key, call(function, old, reflect.ValueOf(v))[0])
+		}
+	})
+	return newmap
+}
+
+func makeConflictHandler(t reflect.Type, startIndex int) reflect.Value {
+	var funct = reflect.FuncOf([]reflect.Type{t, t}, []reflect.Type{t}, false)
+	var funcbody = func(args []reflect.Value) []reflect.Value {
+		return args[startIndex : startIndex+1]
+	}
+	var function = reflect.MakeFunc(funct, funcbody)
+	return function
 }
